@@ -1,67 +1,59 @@
 #%RAML 1.0
 title: ARC Analytics API
 version: v2
-baseUri: https://api.chromerestclient.com
+baseUri: https://advancedrestclient-1155.appspot.com/
 
-uses: 
+uses:
   DailyResutls: resourceTypes/daily-results.raml
   PeriodicalResults: resourceTypes/periodical-results.raml
-types: 
+types:
   ErrorResponse: !include resourceTypes/error-response.raml
-resourceTypes: 
+resourceTypes:
   AnalyserTask: !include resourceTypes/analyser-task.raml
   QueryRequest: !include resourceTypes/query-request.raml
-    
-documentation: 
+
+documentation:
   - !include documentation/how-data-are-stored.raml
+
+traits:
+  AnalyticsData: !include traits/analytics-data.raml
 
 /analytics:
   description: An endpoint that is used to handle analytics data, from recording to queryin for them.
   displayName: Analytics
   get:
-    responses: 
+    responses:
       301:
         description: |
-          This endpoint always redirects to description page about what the 
+          This endpoint always redirects to description page about what the
           analytics API does.
   /record:
-    displayName: Record session
+    displayName: Records a session
     post:
       description: |
         Records a user session in the Analytics service.
-        
-        Users and session data are kept separatly in the datastore. Each user can have only one 
+
+        Users and session data are kept separatly in the datastore. Each user can have only one
         record during the day (from midnight to midnight, taking timezone into account).
-        
+
         Each user must have at least one session during the day. New session is created only if
         last user activity time (last valid request to this endpoint) has been over 30 minutes ago.
-        Otherwise last activity time will be recorded and therefore session is expanded to another 
+        Otherwise last activity time will be recorded and therefore session is expanded to another
         30 minutes.
-        
+
         Body for this method must be `multipar/form-data` with anonymized application ID
-        (this should happen on client side) and user's timezone. The API do not accept client's 
+        (this should happen on client side) and user's timezone. The API do not accept client's
         time because it's not reliable (clients can have different time set up and there's no way
         to handle it). Therefore the API will use current server time adjusted to user's time zone.
-        
-        If new session is created then the the method will return `204` status code. If existing 
+
+        If new session is created then the the method will return `204` status code. If existing
         session has been expanded then the method return `205` status code.
         In both cases there's no response body.
-      headers: 
-        x-api-version:
-          required: true
-          description: | 
-            An information which API version to use.
-            Currently only v2 is supported so the value should be "2".
-          type: integer
-          default: 2
-          example: 2
-          minimum: 2
-          maximum: 2
-      body: 
+      body:
         multipart/form-data:
           description: |
             The request body can be easily created in JavaScript using FormData:
-            
+
             ```
             let data = new FormData();
             data.append('aid', aid); // anonymousId
@@ -74,7 +66,7 @@ documentation:
               body: data
             });
             ```
-          properties: 
+          properties:
             aid:
               type: string
               example: pM0kJK2DCidhPc2F6vjWH56/PRAfi5Lim5jwGMQ+56x/58DbDbRPvbIYSTQMKvuw
@@ -84,40 +76,40 @@ documentation:
                 Anonymized App ID should be used only to call this particular endpoint and never
                 used as any parameter to any other endpoint. This should assure that particular
                 instance of the app can never be find using anonymous App Id.
-                Real application ID is stored on client side and can be used to store user data on 
+                Real application ID is stored on client side and can be used to store user data on
                 application server.
               required: true
             tz:
               type: integer
               example: -8
               description: |
-                A timezone offset to GMT. Example value is an offset to PST (Pacific 
+                A timezone offset to GMT. Example value is an offset to PST (Pacific
                 Standard Time) which is minus 8 hours comparing to GMT.
               minimum: -12
               maximum: 12
-      responses: 
+      responses:
         204:
           description: |
             New session has been set. `204` status code do not return any data.
         205:
           description: |
-            Existing session has been expanded for next 30 minutes. This endpoint do not return 
+            Existing session has been expanded for next 30 minutes. This endpoint do not return
             data.
         400:
           description: There is an issue with your parameters
-          body: 
+          body:
             application/json:
               type: ErrorResponse
   /query:
     displayName: Query analytics
     description: |
       The Query endpoint is responsible for getting data out from the datastore.
-      
+
       The data are agregated every day, week (on monday) and month (every first day of month).
       This endpoints returns data from aggregated tables and never operated on raw data.
-      
+
       Depending on endpoint it can return only number of users/sessions for given day or number
-      of users or session for a week or month with daily sessions or users. See methods 
+      of users or session for a week or month with daily sessions or users. See methods
       documentation for more details.
     /daily:
       displayName: Daily
@@ -127,228 +119,150 @@ documentation:
         type: QueryRequest
         description: Query for users in particular day
         get:
+          is: [AnalyticsData:{responseType: DailyResutls.DailyUsers}]
           description: |
             This method returns number of users recorded in given day.
             Date ranges are not allowed here. See "How data are stored" guide for more information.
-            
-            Occasionally `404` status code can be returned if aggregated data for last day hasn't 
-            been generated yet. Time of data aggregation is regulated by the server's cron 
-            and can vary. It depends on server load and number of tasks in queue. If `404` status 
+
+            Occasionally `404` status code can be returned if aggregated data for last day hasn't
+            been generated yet. Time of data aggregation is regulated by the server's cron
+            and can vary. It depends on server load and number of tasks in queue. If `404` status
             code is returned try in an hour or so to check if data were aggregated already.
-          queryParameters: 
-            day:
-              type: date-only
-              description: |
-                A day for which you requesting the data. It must be valid "YYYY-MM-dd" pattern or 
-                otherwise this query return 400 error code.
-                Only dates in past are allowed. Current and future dates will result in 400 error
-                code.
-              example: 2017-01-01
-              required: true
-          responses: 
-            200:
-              description: The `200` status code means that the number of sessions is available for the given day.
-              body: 
-                application/json:
-                  type: DailyResutls.DailyUsers
       /sessions:
         displayName: Sessions
         type: QueryRequest
         description: Query for sessions in particular day
         get:
+          is: [AnalyticsData:{responseType: DailyResutls.DailySessions}]
           description: |
             This method returns number of sessions recorded in given day.
             Date ranges are not allowed here. See "How data are stored" guide for more information.
-            
-            Occasionally `404` status code can be returned if aggregated data for last day hasn't 
-            been generated yet. Time of data aggregation is regulated by the server's cron 
-            and can vary. It depends on server load and number of tasks in queue. If `404` status 
+
+            Occasionally `404` status code can be returned if aggregated data for last day hasn't
+            been generated yet. Time of data aggregation is regulated by the server's cron
+            and can vary. It depends on server load and number of tasks in queue. If `404` status
             code is returned try in an hour or so to check if data were aggregated already.
-          queryParameters: 
-            day:
-              type: date-only
-              description: |
-                A day for which you are requesting the data. It must be valid "YYYY-MM-dd" pattern or 
-                otherwise this query return 400 error code.
-                Only dates in past are allowed. Current and future dates will result in a `400` 
-                error code.
-              example: 2017-01-01
-              required: true
-          responses: 
-            200:
-              description: The `200` status code means that the number of sessions is available for the given day.
-              body: 
-                application/json:
-                  type: DailyResutls.DailySessions
-    /{period}:
+    /{scope}:
       description: Endpoint to query for periodical statistics.
-      uriParameters: 
-        period: 
+      uriParameters:
+        scope:
           type: string
           enum: [weekly, monthly]
           example: weekly
           required: true
           description: |
             A time period for the statistics. Only `weekly` and `monthly` values are allowed.
-            
       /users:
         displayName: Users
         type: QueryRequest
         description: |
           Query for number of users in particular week.
         get:
+          is: [AnalyticsData:{responseType: PeriodicalResults.PeriodicalUsers}]
           description: |
             This method returns number of users recorded for given week beginning on Monday.
             Date ranges are not allowed here. See "How data are stored" guide for more information.
-            
+
             The `day` parameter should be the Monday for given week. If it's not a monday it will
             be set to a Monday before the `day`.
-            
-            This method returns aggregated number of users for the given week starting from Monday 
+
+            This method returns aggregated number of users for the given week starting from Monday
             to the following Sunday and number of users for each day.
-            
-            Occasionally `404` status code can be returned if aggregated data for last day hasn't 
-            been generated yet. Time of data aggregation is regulated by the server's cron 
-            and can vary. It depends on server load and number of tasks in queue. If `404` status 
+
+            Occasionally `404` status code can be returned if aggregated data for last day hasn't
+            been generated yet. Time of data aggregation is regulated by the server's cron
+            and can vary. It depends on server load and number of tasks in queue. If `404` status
             code is returned try in an hour or so to check if data were aggregated already.
-          queryParameters: 
-            day:
-              type: date-only
-              description: |
-                A start day for which you requesting the data. It must be valid "YYYY-MM-dd" pattern 
-                or otherwise this query return 400 error code.
-                If the given day is not a monday it will be set to the Monday before given date.
-                
-                Only date range in past is allowed. Both the Monday and the Sunday must be in the 
-                past. Current and future dates will result in 400 error code.
-              example: 2017-01-01
-              required: true
-          responses: 
-            200:
-              description: |
-                The `200` status code means that the number of users is available for 
-                the given time period.
-              body: 
-                application/json:
-                  type: PeriodicalResults.PeriodicalUsers
       /sessions:
         displayName: Sessions
         type: QueryRequest
         description: Query for sessions in particular day
         get:
+          is: [AnalyticsData:{responseType: PeriodicalResults.PeriodicalSessions}]
           description: |
             This method returns number of sessions recorded in given week beginning on Monday.
             Date ranges are not allowed here. See "How data are stored" guide for more information.
-            
+
             The `day` parameter should be the Monday for given week. If it's not a monday it will
             be set to a Monday before the `day`.
-            
-            This method returns aggregated number of users for the given week starting from Monday 
+
+            This method returns aggregated number of users for the given week starting from Monday
             to the following Sunday and number of users for each day.
-            
-            Occasionally `404` status code can be returned if aggregated data for last day hasn't 
-            been generated yet. Time of data aggregation is regulated by the server's cron 
-            and can vary. It depends on server load and number of tasks in queue. If `404` status 
+
+            Occasionally `404` status code can be returned if aggregated data for last day hasn't
+            been generated yet. Time of data aggregation is regulated by the server's cron
+            and can vary. It depends on server load and number of tasks in queue. If `404` status
             code is returned try in an hour or so to check if data were aggregated already.
-          queryParameters: 
-            day:
-              type: date-only
-              description: |
-                A start day for which you requesting the data. It must be valid "YYYY-MM-dd" pattern 
-                or otherwise this query return 400 error code.
-                If the given day is not a monday it will be set to the Monday before given date.
-                
-                Only date range in past is allowed. Both the Monday and the Sunday must be in the 
-                past. Current and future dates will result in 400 error code.
-              example: 2017-01-01
-              required: true
-          responses: 
-            200:
-              description: |
-                The `200` status code means that the number of sessions is available for the 
-                given time period.
-              body: 
-                application/json:
-                  type: PeriodicalResults.PeriodicalSessions
 /tasks:
   displayName: Tasks
   description: |
-    Server that handles tasks queue.
-  /schedule-analyser:
+    Server that handles cron calls.
+
+    This endpoint is meant to be called by cron. It is mapping calls to the `/analyzer/` endpoint.
+  /{scope}/{type}:
+    uriParameters:
+      type:
+        type: string
+        enum: [users, sessions]
+        description: |
+          Type of the data to compute. Can be either `users` to compute number of users for given scope and `sessions` to compute number of sessions.
+      scope:
+        type: string
+        enum: [daily, weekly, monthly]
+        description: |
+          The time scope of computation to perform. It can be either `daily`, `weekly` or `monthly`.
+
+          Except for the daily type, actual start date may be different than the one provided in the `day` query parameter.
+          For weekly computations the server will always set monday going backward if the day is not Monday.
+          Similar for monthly computations it will be always set to the first day of month.
     get:
-      description: |
-        A method used by the cron.
-        
-        When requested it schedules (add tasks) to compute daily, weekly and monthly data.
-        
-        It always schedules daily aggregation.
-        
-        If the day when this method is executed is Monday then weekly aggregation task will be added.
-        
-        If the day when this method is executed is first day of month then monthly aggregation will be scheduled.
-      responses: 
-        204:
-          description: The tasks were added correctly. Any other status code means error.
-  /schedule:
-    get:
-      description: |
-        Shedule a selected task for given time period.
-        
-        For **daily** tasks the `date` parameter means the date for which the data should be computed.
-        
-        For **weekly** tasks the `date` parameter means the first day of week (Monday). If given day 
-        is not Monday then it will be set to Monday before the `date`.
-        
-        Similar to `weekly`, for **monthly** tasks the `date` parameter means the first day of month.
-        If the `date` parameter is not first day of the mont it will be set to first day of month 
-        before the date.
-        
-        In all cases, if the time period for the given `date` parameter will be today or in the 
-        future, the method will result with `400` status code. If successfull it returns `204`
-        status code.
-        
-      queryParameters: 
-        date:
-          type: date-only
+      headers:
+        X-Appengine-Cron:
+          type: boolean
           required: true
-          description: |
-            The date in the past.
-            For **weekly** reports the `date` + 7 days must be in the past.
-            For **monthly** reports the `date` + number of days in the month must be in the past.
-            If the date rande is today or in the future then the method result with 400 status
-            code.
-          example: 2017-01-02
-        type:
-          description: The type of task to schedule. Possible values are `daily`, `weekly` or `monthly`
-          example: daily
-          required: true
-          enum: [daily, weekly, monthly]
-      responses: 
+          default: true
+          description: Every cron job is called with this header and the endpoint test against it's precence.
+      description: Handles the cron job and execute service that is responsible for data computation.
+      responses:
         204:
-          description: This status code means that task were scheduled correctly.
-        400:
-          description: Check your parameters if all required parameters are present and have correct format.
-          body: 
-            application/json:
-              type: ErrorResponse
-/analyser:
+          description: The task was executed correctly and data has been computed. Any other status  code means an error.
+/analyzer:
   description: |
     The analyser endpoint is to be run as a task.
-    
-    Because tasks computes a lot of data and performs operation on potentially hundred of thousands 
-    of records this will most possibly reach request time limit (30 secodns) and return with `500` 
+
+    Because tasks computes a lot of data and performs operation on potentially hundred of thousands
+    of records this will most possibly reach request time limit (30 secodns) and return with `500`
     status code.
-    
+
     Tasks are executed in special environment and are allowed to work for up to 10 minutes.
-  /daily:
+  /{scope}/{type}:
+    uriParameters:
+      type:
+        type: string
+        enum: [users, sessions]
+        description: |
+          Type of the data to compute. Can be either `users` to compute number of users for given scope and `sessions` to compute number of sessions.
+      scope:
+        type: string
+        enum: [daily, weekly, monthly]
+        description: |
+          The time scope of computation to perform. It can be either `daily`, `weekly` or `monthly`.
+
+          Except for the daily type, actual start date may be different than the one provided in the `day` query parameter. For weekly computations the server will always set monday going backward if the day is not Monday.
+          Similar for monthly computations it will be always set to the first day of month.
     type: AnalyserTask
     get:
-      description: Computes daily analytics data.
-  /weekly:
-    type: AnalyserTask
-    get:
-      description: Computes weekly analytics data.
-  /monthly:
-    type: AnalyserTask
-    get:
-      description: Computes monthly analytics data.
+      description: Computes the data for given scope and type.
+/.well-known//acme-challenge/{challenge}:
+  description: An endpoint to make a request from the LetsEncrypt service to confirm the domain ownership.
+  uriParameters:
+    challenge:
+      description: A challenge code
+      type: string
+      required: true
+  get:
+    description: Challenge the code.
+    responses:
+      200:
+        body:
+          text/html: string
