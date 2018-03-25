@@ -14,7 +14,7 @@ get:
         - Missing required query parameter.
       body: 
         application/json:
-          type: !include error-response.raml
+          type: !include ../types/error.raml
     404:
       description: |
         The `404` status code is only possible if aggregated data for given period of time is 
@@ -29,4 +29,4 @@ get:
         manually by the administrator.
       body: 
         application/json:
-          type: !include error-response.raml
+          type: !include ../types/error.raml
